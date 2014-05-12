@@ -2,6 +2,7 @@ import hashlib
 
 from twisted.internet import defer
 
+
 def signedInt(n):
     n = n & 0xffffffff
     return ((1 << 31) & n) and (~n + 1) or n
@@ -17,13 +18,15 @@ def ketama(key):
     """
     d = hashlib.md5(key).digest()
     c = signedInt
-    h = c((ord(d[3])&0xff) << 24) | c((ord(d[2]) & 0xff) << 16) | c((ord(d[1]) & 0xff) << 8) | c(ord(d[0]) & 0xff)
+    h = (c((ord(d[3]) & 0xff) << 24) | c((ord(d[2]) & 0xff) << 16)
+         | c((ord(d[1]) & 0xff) << 8) | c(ord(d[0]) & 0xff))
     return h
 
 
 def deferredDict(d):
     """
-    Just like a C{defer.DeferredList} but instead accepts and returns a C{dict}.
+    Just like a C{defer.DeferredList} but instead accepts and returns a
+    C{dict}.
 
     @param d: A C{dict} whose values are all C{Deferred} objects.
 
@@ -52,22 +55,19 @@ class Memoizer:
     def __init__(self, client):
         self.client = client
 
-
     def memoize(self, func):
         self.func = func
         return self.caller
 
-
     def caller(self, *args, **kwargs):
-        self.key = hashlib.sha1(repr(self.client) + repr(args) + repr(kwargs)).hexdigest()
+        self.key = hashlib.sha1(
+            repr(self.client) + repr(args) + repr(kwargs)).hexdigest()
         d = self.client.getPickled(self.key)
         return d.addCallback(self.handleResult, args, kwargs)
-
 
     def saveResult(self, result):
         d = self.client.setPickled(self.key, result)
         return d.addCallback(lambda _: result)
-
 
     def handleResult(self, result, args, kwargs):
         if result[1] is None:
