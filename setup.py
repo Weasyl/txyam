@@ -14,4 +14,9 @@ setup(
         'twisted>=12.0',
         'consistent_hash',
     ],
+    extras_require={
+        'sync': [
+            'crochet>=1.2.0',
+        ],
+    },
 )
