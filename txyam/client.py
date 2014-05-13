@@ -8,7 +8,7 @@ from txyam.utils import deferredDict
 from txyam.factory import MemCacheClientFactory
 
 
-def wrap(cmd):
+def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
     """
@@ -123,16 +123,16 @@ class YamClient(object):
                 ret.update(result)
         return ret
 
-    set = wrap('set')
-    get = wrap('get')
-    increment = wrap('increment')
-    decrement = wrap('decrement')
-    replace = wrap('replace')
-    add = wrap('add')
-    checkAndSet = wrap('checkAndSet')
-    append = wrap('append')
-    prepend = wrap('prepend')
-    delete = wrap('delete')
+    set = _wrap('set')
+    get = _wrap('get')
+    increment = _wrap('increment')
+    decrement = _wrap('decrement')
+    replace = _wrap('replace')
+    add = _wrap('add')
+    checkAndSet = _wrap('checkAndSet')
+    append = _wrap('append')
+    prepend = _wrap('prepend')
+    delete = _wrap('delete')
 
 
 def ConnectedYamClient(hosts):
