@@ -2,8 +2,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="txyam",
-    version="0.4",
+    name="txyam2",
+    version="0.5",
     description="Yet Another Memcached (YAM) client for Twisted.",
     author="Brian Muller",
     author_email="bamuller@gmail.com",
