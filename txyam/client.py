@@ -125,6 +125,12 @@ class YamClient(object):
             ds[key] = self.set(key, value, flags, expireTime)
         return deferredDict(ds)
 
+    def deleteMultiple(self, keys):
+        ds = {}
+        for key in keys:
+            ds[key] = self.delete(key)
+        return deferredDict(ds)
+
     def _consolidateMultiple(self, results):
         ret = {}
         for succeeded, result in results:
