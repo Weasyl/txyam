@@ -15,26 +15,26 @@ def _wrap(cmd):
     def wrapper(self, key, *args, **kwargs):
         client = self.getClient(key)
         if client is None:
-            return None
+            return defer.succeed(None)
         func = getattr(client, cmd)
-        return func(key, *args, **kwargs)
+        d = func(key, *args, **kwargs)
+        d.addErrback(lambda ign: None)
+        return d
     return wrapper
 
 
 class YamClient(object):
-    def __init__(self, hosts, connect=True, reactor=None, retryDelay=2):
-        if reactor is None:
-            from twisted.internet import reactor
+    clientFromString = staticmethod(endpoints.clientFromString)
 
+    def __init__(self, reactor, hosts, retryDelay=2, **kw):
+        self.reactor = reactor
         self._allHosts = hosts
         self._consistentHash = ConsistentHash([])
         self._connectionDeferreds = set()
         self._protocols = {}
         self._retryDelay = retryDelay
-        self.reactor = reactor
+        self._protocolKwargs = kw
         self.disconnecting = False
-        if connect:
-            self.connect()
 
     def connect(self):
         self.disconnecting = False
@@ -47,8 +47,9 @@ class YamClient(object):
         return dl
 
     def _connectHost(self, host):
-        endpoint = endpoints.clientFromString(self.reactor, host)
-        d = endpoint.connect(MemCacheClientFactory())
+        endpoint = self.clientFromString(self.reactor, host)
+        d = endpoint.connect(
+            MemCacheClientFactory(self.reactor, **self._protocolKwargs))
         self._connectionDeferreds.add(d)
         d.addCallback(self._gotProtocol, host, d)
         d.addErrback(self._connectionFailed, host, d)
@@ -105,14 +106,16 @@ class YamClient(object):
         return deferredDict(ds)
 
     def getClient(self, key):
-        return self._protocols[self._consistentHash.get_node(key)]
+        return self._protocols.get(self._consistentHash.get_node(key))
 
     def getMultiple(self, keys, withIdentifier=False):
         clients = defaultdict(list)
         for key in keys:
             clients[self.getClient(key)].append(key)
         dl = defer.DeferredList(
-            [c.getMultiple(ks) for c, ks in clients.iteritems()])
+            [c.getMultiple(ks, withIdentifier) for c, ks in clients.iteritems()
+             if c is not None],
+            consumeErrors=True)
         dl.addCallback(self._consolidateMultiple)
         return dl
 
@@ -133,7 +136,3 @@ class YamClient(object):
     append = _wrap('append')
     prepend = _wrap('prepend')
     delete = _wrap('delete')
-
-
-def ConnectedYamClient(hosts):
-    return YamClient(hosts, connect=False).connect()

@@ -17,9 +17,10 @@ def deferredDict(d):
 
     def handle(results, names):
         rvalue = {}
-        for index in range(len(results)):
-            rvalue[names[index]] = results[index][1]
+        for key, (succeeded, value) in zip(names, results):
+            if succeeded:
+                rvalue[key] = value
         return rvalue
 
-    dl = defer.DeferredList(d.values())
+    dl = defer.DeferredList(d.values(), consumeErrors=True)
     return dl.addCallback(handle, d.keys())
