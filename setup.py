@@ -10,6 +10,8 @@ setup(
     license="MIT",
     url="http://github.com/bmuller/txyam",
     packages=find_packages(),
-    requires=["twisted.protocols.memcache"],
-    install_requires=['twisted>=12.0']
+    install_requires=[
+        'twisted>=12.0',
+        'consistent_hash',
+    ],
 )
