@@ -4,3 +4,5 @@ apidoc
 *.pyc
 build
 dist
+/htmlcov
+/.coverage
