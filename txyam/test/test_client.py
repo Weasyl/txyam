@@ -402,6 +402,85 @@ class YamClientTests(TestCase):
         d = self.yam.getMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
         self.assertEqual(self.successResultOf(d), {})
 
+    def test_setMultipleQuery(self):
+        """
+        setMultiple issues commands to multiple clients.
+        """
+        self.yam.connect()
+        self.yam.setMultiple({
+            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+        })
+        ep1 = self.yam._endpoints['fake:1']
+        ep2 = self.yam._endpoints['fake:2']
+        self.assertEqual(ep1.transport.value(), 'set key5 0 0 1\r\n5\r\n')
+        self.assertEqual(
+            sorted(ep2.transport.value().splitlines()[::2]), [
+                'set key1 0 0 1',
+                'set key2 0 0 1',
+                'set key3 0 0 1',
+                'set key4 0 0 1',
+            ])
+
+    def test_setMultipleAnswer(self):
+        """
+        setMultiple aggregates answers from each client.
+        """
+        self.yam.connect()
+        d = self.yam.setMultiple({
+            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+        })
+        self.assertNoResult(d)
+        ep1 = self.yam._endpoints['fake:1']
+        ep2 = self.yam._endpoints['fake:2']
+        ep1.proto.dataReceived('STORED\r\n')
+        ep2.proto.dataReceived('STORED\r\n' * 4)
+        self.assertEqual(
+            self.successResultOf(d),
+            {
+                'key1': True,
+                'key2': True,
+                'key3': True,
+                'key4': True,
+                'key5': True,
+            })
+
+    def test_setMultipleQueryWithOneClient(self):
+        """
+        Because of consistent hashing, if one client out of two is down, the
+        other will receive all of the downed client's requests.
+        """
+        self.yam._endpoints['fake:2'].failure = FakeError()
+        self.yam.connect()
+        self.assertEqual(len(self.flushLoggedErrors(FakeError)), 1)
+        self.yam.setMultiple({
+            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+        })
+        ep1 = self.yam._endpoints['fake:1']
+        self.assertEqual(
+            sorted(ep1.transport.value().splitlines()[::2]), [
+                'set key1 0 0 1',
+                'set key2 0 0 1',
+                'set key3 0 0 1',
+                'set key4 0 0 1',
+                'set key5 0 0 1',
+            ])
+
+    def test_setMultipleQueryWithNoClients(self):
+        """
+        If there are no clients available, setMultiple will immediately fire
+        with a dict mapping each key to None.
+        """
+        self.yam._endpoints['fake:1'].failure = FakeError()
+        self.yam._endpoints['fake:2'].failure = FakeError()
+        self.yam.connect()
+        self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
+        d = self.yam.setMultiple({
+            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+        })
+        self.assertEqual(
+            self.successResultOf(d),
+            dict.fromkeys(['key1', 'key2', 'key3', 'key4', 'key5']))
+
 
 class CustomYamClientTests(TestCase):
     @pytest.fixture(autouse=True)

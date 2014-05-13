@@ -119,6 +119,12 @@ class YamClient(object):
         dl.addCallback(self._consolidateMultiple)
         return dl
 
+    def setMultiple(self, items, flags=0, expireTime=0):
+        ds = {}
+        for key, value in items.iteritems():
+            ds[key] = self.set(key, value, flags, expireTime)
+        return deferredDict(ds)
+
     def _consolidateMultiple(self, results):
         ret = {}
         for succeeded, result in results:
