@@ -144,6 +144,18 @@ class YamClientTests(TestCase):
         self.assertNotIn(endpoint.proto, (proto1, proto2))
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
 
+    def test_retryOnConnectionAborted(self):
+        """
+        On a connection loss from a ConnectionAborted failure, the connection
+        is reattempted immediately.
+        """
+        endpoint = self.yam._endpoints['fake:1']
+        self.yam.connect()
+        proto = endpoint.proto
+        endpoint.proto.connectionLost(Failure(ConnectionAborted()))
+        self.assertIsNot(proto, endpoint.proto)
+        self.assertEqual(len(self.flushLoggedErrors(ConnectionAborted)), 1)
+
     def test_disconnectCancelsConnectingDeferreds(self):
         """
         Any deferreds from connections still connecting get canceled on calling

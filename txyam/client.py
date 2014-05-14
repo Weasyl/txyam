@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from consistent_hash.consistent_hash import ConsistentHash
+from twisted.internet.error import ConnectionAborted
 from twisted.internet import defer, endpoints
 from twisted.python import log
 
@@ -75,7 +76,10 @@ class YamClient(object):
         self._consistentHash.del_nodes([host])
         if self.disconnecting:
             return
-        self.reactor.callLater(self._retryDelay, self._connectHost, host)
+        if reason.check(ConnectionAborted):
+            self._connectHost(host)
+        else:
+            self.reactor.callLater(self._retryDelay, self._connectHost, host)
 
     @property
     def _allConnections(self):
