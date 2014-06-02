@@ -21,7 +21,7 @@ class InvalidHostPortError(Exception):
     """
 
 
-def wrap(cmd):
+def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
     """
@@ -133,18 +133,18 @@ class YamClient:
 
     # Following methods can be found at
     # http://twistedmatrix.com/trac/browser/tags/releases/twisted-12.0.0/twisted/protocols/memcache.py
-    set = wrap("set")
-    get = wrap("get")
-    increment = wrap("increment")
-    decrement = wrap("decrement")
-    replace = wrap("replace")
-    add = wrap("add")
-    set = wrap("set")
-    checkAndSet = wrap("checkAndSet")
-    append = wrap("append")
-    prepend = wrap("prepend")
-    getMultiple = wrap("getMultiple")
-    delete = wrap("delete")
+    set = _wrap("set")
+    get = _wrap("get")
+    increment = _wrap("increment")
+    decrement = _wrap("decrement")
+    replace = _wrap("replace")
+    add = _wrap("add")
+    set = _wrap("set")
+    checkAndSet = _wrap("checkAndSet")
+    append = _wrap("append")
+    prepend = _wrap("prepend")
+    getMultiple = _wrap("getMultiple")
+    delete = _wrap("delete")
 
 
 def ConnectedYamClient(hosts):
