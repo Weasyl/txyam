@@ -1,6 +1,7 @@
 import collections
 
 from twisted.internet import defer
+from twisted.python.failure import Failure
 from twisted.trial import unittest
 
 from txyam import client
@@ -128,6 +129,75 @@ class YamClientTests(unittest.TestCase):
         self.request = request
         self.requestDeferred = defer.Deferred()
         return self.requestDeferred
+
+    def test_flushAllRequestWithNoFactories(self):
+        """
+        If there are no factories, the flushAll request is empty.
+        """
+        self.client.factories = []
+        self.client.flushAll()
+        self.assertEqual(self.request, {})
+
+    def test_flushAllRequestWithOneFactory(self):
+        """
+        flushAll requests can be issued to one factory.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        self.client.flushAll()
+        self.assertEqual(self.request, {
+            fac.client: (0, 'flushAll', (), {}),
+        })
+
+    def test_flushAllRequestWithTwoFactories(self):
+        """
+        flushAll requests can be issued to two factories.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        self.client.factories = [fac1, fac2]
+        self.client.flushAll()
+        self.assertEqual(self.request, {
+            fac1.client: (0, 'flushAll', (), {}),
+            fac2.client: (1, 'flushAll', (), {}),
+        })
+
+    def test_flushAllRequestNoFactory(self):
+        """
+        flushAll requests aren't issued to factories without clients.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        fac2.client = None
+        self.client.factories = [fac1, fac2]
+        self.client.flushAll()
+        self.assertEqual(self.request, {
+            fac1.client: (0, 'flushAll', (), {}),
+        })
+
+    def test_flushAllUnwrapping(self):
+        """
+        The returned deferred looks like that of a DeferredList once unwrapped.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        d = self.client.flushAll()
+        self.assertNoResult(d)
+        sentinel = object()
+        self.requestDeferred.callback({0: sentinel})
+        self.assertEqual(self.successResultOf(d), [(True, sentinel)])
+
+    def test_flushAllUnwrappingFailure(self):
+        """
+        Similarly, Failures get unwrapped just like in a DeferredList.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        d = self.client.flushAll()
+        self.assertNoResult(d)
+        sentinel = Failure(ValueError)
+        self.requestDeferred.callback({0: sentinel})
+        self.assertEqual(self.successResultOf(d), [(False, sentinel)])
 
     def test_statsRequestWithNoFactories(self):
         """

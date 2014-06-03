@@ -3,7 +3,7 @@ import zlib
 
 from twisted.internet.defer import inlineCallbacks, DeferredList, returnValue
 from twisted.internet import reactor
-from twisted.python import log
+from twisted.python import failure, log
 
 from txyam.utils import ketama, deferredDict
 from txyam.factory import MemCacheClientFactory
@@ -100,9 +100,17 @@ class YamClient:
             connection.transport.loseConnection()
 
     def flushAll(self):
-        hosts = self.getActiveConnections()
-        log.msg("Flushing %i hosts" % len(hosts))
-        return DeferredList([host.flushAll() for host in hosts])
+        request = {}
+        for e, client in enumerate(self.getActiveConnections()):
+            request[client] = e, 'flushAll', (), {}
+        log.msg("Flushing %i hosts" % len(request))
+
+        def unwrap(result):
+            result = result.items()
+            result.sort()
+            return [(not isinstance(b, failure.Failure), b) for a, b in result]
+
+        return self._issueRequest(request).addCallback(unwrap)
 
     def stats(self):
         request = {}
