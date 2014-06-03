@@ -104,23 +104,25 @@ class YamClient:
         log.msg("Flushing %i hosts" % len(hosts))
         return DeferredList([host.flushAll() for host in hosts])
 
-    def stats(self, arg=None):
-        ds = {}
+    def stats(self):
+        request = {}
         for factory in self.factories:
-            if not factory.client is None:
-                hp = "%s:%i" % (factory.addr.host, factory.addr.port)
-                ds[hp] = factory.client.stats(arg)
-        log.msg("Getting stats on %i hosts" % len(ds))
-        return deferredDict(ds)
+            if factory.client is None:
+                continue
+            hp = "%s:%i" % (factory.addr.host, factory.addr.port)
+            request[factory.client] = hp, 'stats', (), {}
+        log.msg("Getting stats on %i hosts" % len(request))
+        return self._issueRequest(request)
 
     def version(self):
-        ds = {}
+        request = {}
         for factory in self.factories:
-            if not factory.client is None:
-                hp = "%s:%i" % (factory.addr.host, factory.addr.port)
-                ds[hp] = factory.client.version()
-        log.msg("Getting version on %i hosts" % len(ds))
-        return deferredDict(ds)
+            if factory.client is None:
+                continue
+            hp = "%s:%i" % (factory.addr.host, factory.addr.port)
+            request[factory.client] = hp, 'version', (), {}
+        log.msg("Getting version on %i hosts" % len(request))
+        return self._issueRequest(request)
 
     def pickle(self, value, compress):
         p = cPickle.dumps(value, cPickle.HIGHEST_PROTOCOL)

@@ -1,3 +1,5 @@
+import collections
+
 from twisted.internet import defer
 from twisted.trial import unittest
 
@@ -27,7 +29,17 @@ class FakeYamClient(object):
 
     def _issueRequest(self, request):
         self.request = request
-        return defer.Deferred()
+        self.deferred = defer.Deferred()
+        return self.deferred
+
+
+FakeAddress = collections.namedtuple('FakeAddress', ['host', 'port'])
+
+
+class FakeFactory(object):
+    def __init__(self, host, port):
+        self.addr = FakeAddress(host, port)
+        self.client = FakeClient()
 
 
 class IssueRequestTests(unittest.TestCase):
@@ -92,3 +104,129 @@ class WrapTests(unittest.TestCase):
         wrapper(c, '1', d='2')
         self.assertEqual(
             c.request, {c.clients['1']: (None, 'eggs', ('1',), {'d': '2'})})
+
+    def test_unwrapping(self):
+        """
+        The result passed back after the request is unwrapped to a single
+        value.
+        """
+        wrapper = client._wrap('spam')
+        c = FakeYamClient()
+        d = wrapper(c, '1', '2')
+        self.assertNoResult(d)
+        sentinel = object()
+        c.deferred.callback({None: sentinel})
+        self.assertIdentical(self.successResultOf(d), sentinel)
+
+
+class YamClientTests(unittest.TestCase):
+    def setUp(self):
+        self.client = client.YamClient(['localhost'], connect=False)
+        self.client._issueRequest = self._issueRequest
+
+    def _issueRequest(self, request):
+        self.request = request
+        self.requestDeferred = defer.Deferred()
+        return self.requestDeferred
+
+    def test_statsRequestWithOneFactory(self):
+        """
+        Stats requests can be issued to one factory.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        self.client.stats()
+        self.assertEqual(self.request, {
+            fac.client: ('localhost:11211', 'stats', (), {}),
+        })
+
+    def test_statsRequestWithTwoFactories(self):
+        """
+        Stats requests can be issued to two factories.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        self.client.factories = [fac1, fac2]
+        self.client.stats()
+        self.assertEqual(self.request, {
+            fac1.client: ('localhost:11211', 'stats', (), {}),
+            fac2.client: ('localhost:11212', 'stats', (), {}),
+        })
+
+    def test_statsRequestNoFactory(self):
+        """
+        Stats requests aren't issued to factories without clients.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        fac2.client = None
+        self.client.factories = [fac1, fac2]
+        self.client.stats()
+        self.assertEqual(self.request, {
+            fac1.client: ('localhost:11211', 'stats', (), {}),
+        })
+
+    def test_statsFiresWithWhatever(self):
+        """
+        The returned deferred will fire with whatever the request's response
+        fires with.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        d = self.client.stats()
+        self.assertNoResult(d)
+        sentinel = object()
+        self.requestDeferred.callback({'localhost:11211': sentinel})
+        self.assertEqual(
+            self.successResultOf(d), {'localhost:11211': sentinel})
+
+    def test_versionRequestWithOneFactory(self):
+        """
+        Version requests can be issued to one factory.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        self.client.version()
+        self.assertEqual(self.request, {
+            fac.client: ('localhost:11211', 'version', (), {}),
+        })
+
+    def test_versionRequestWithTwoFactories(self):
+        """
+        Version requests can be issued to two factories.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        self.client.factories = [fac1, fac2]
+        self.client.version()
+        self.assertEqual(self.request, {
+            fac1.client: ('localhost:11211', 'version', (), {}),
+            fac2.client: ('localhost:11212', 'version', (), {}),
+        })
+
+    def test_versionRequestNoFactory(self):
+        """
+        Version requests aren't issued to factories without clients.
+        """
+        fac1 = FakeFactory('localhost', 11211)
+        fac2 = FakeFactory('localhost', 11212)
+        fac2.client = None
+        self.client.factories = [fac1, fac2]
+        self.client.version()
+        self.assertEqual(self.request, {
+            fac1.client: ('localhost:11211', 'version', (), {}),
+        })
+
+    def test_versionFiresWithWhatever(self):
+        """
+        The returned deferred will fire with whatever the request's response
+        fires with.
+        """
+        fac = FakeFactory('localhost', 11211)
+        self.client.factories = [fac]
+        d = self.client.version()
+        self.assertNoResult(d)
+        sentinel = object()
+        self.requestDeferred.callback({'localhost:11211': sentinel})
+        self.assertEqual(
+            self.successResultOf(d), {'localhost:11211': sentinel})
