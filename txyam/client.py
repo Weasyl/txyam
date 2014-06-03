@@ -25,13 +25,33 @@ def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
     """
+    def unwrap(result, client):
+        return result[client]
+
     def wrapper(self, key, *args, **kwargs):
-        func = getattr(self.getClient(key), cmd)
-        return func(key, *args, **kwargs)
+        client = self.getClient(key)
+        request = {client: (cmd, (key,) + args, kwargs)}
+        return self._issueRequest(request).addCallback(unwrap, client)
     return wrapper
 
 
+def _issueRequest(request):
+    """
+    Issue a named request to some clients.
+
+    This is primarily for testing purposes, so that wrappers can build up a
+    request and the tests can inspect the request.
+    """
+    ret = {}
+    for client, (method, args, kwargs) in request.iteritems():
+        method = getattr(client, method)
+        ret[client] = method(*args, **kwargs)
+    return deferredDict(ret)
+
+
 class YamClient:
+    _issueRequest = staticmethod(_issueRequest)
+
     def __init__(self, hosts, connect=True):
         """
         @param hosts: A C{list} of C{tuple}s containing hosts and ports.
