@@ -36,7 +36,7 @@ class IssueRequestTests(unittest.TestCase):
         Issuing a request to one client will come back with one response.
         """
         c = FakeClient()
-        d = client._issueRequest({c: ('spam', (1,), {'b': 2})})
+        d = client._issueRequest({c: (c, 'spam', (1,), {'b': 2})})
         self.assertEqual(
             self.successResultOf(d),
             {c: ('spam', 1, 2)})
@@ -48,8 +48,8 @@ class IssueRequestTests(unittest.TestCase):
         c1 = FakeClient()
         c2 = FakeClient()
         d = client._issueRequest({
-            c1: ('spam', (1, 2), {}),
-            c2: ('eggs', (), {'c': 3, 'd': 4}),
+            c1: (c1, 'spam', (1, 2), {}),
+            c2: (c2, 'eggs', (), {'c': 3, 'd': 4}),
         })
         self.assertEqual(
             self.successResultOf(d),
@@ -57,6 +57,17 @@ class IssueRequestTests(unittest.TestCase):
                 c1: ('spam', 1, 2),
                 c2: ('eggs', 3, 4),
             })
+
+    def test_alternateKey(self):
+        """
+        A request's response can come back with a different key than the
+        request was made with.
+        """
+        d = client._issueRequest(
+            {FakeClient(): ('eggs', 'spam', (1,), {'b': 2})})
+        self.assertEqual(
+            self.successResultOf(d),
+            {'eggs': ('spam', 1, 2)})
 
 
 class WrapTests(unittest.TestCase):
@@ -68,7 +79,8 @@ class WrapTests(unittest.TestCase):
         wrapper = client._wrap('spam')
         c = FakeYamClient()
         wrapper(c, '1', '2')
-        self.assertEqual(c.request, {c.clients['1']: ('spam', ('1', '2'), {})})
+        self.assertEqual(
+            c.request, {c.clients['1']: (None, 'spam', ('1', '2'), {})})
 
     def test_wrappingEggsMethod(self):
         """
@@ -79,4 +91,4 @@ class WrapTests(unittest.TestCase):
         c = FakeYamClient()
         wrapper(c, '1', d='2')
         self.assertEqual(
-            c.request, {c.clients['1']: ('eggs', ('1',), {'d': '2'})})
+            c.request, {c.clients['1']: (None, 'eggs', ('1',), {'d': '2'})})

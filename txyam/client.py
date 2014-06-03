@@ -25,13 +25,13 @@ def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
     """
-    def unwrap(result, client):
-        return result[client]
+    def unwrap(result):
+        return result[None]
 
     def wrapper(self, key, *args, **kwargs):
         client = self.getClient(key)
-        request = {client: (cmd, (key,) + args, kwargs)}
-        return self._issueRequest(request).addCallback(unwrap, client)
+        request = {client: (None, cmd, (key,) + args, kwargs)}
+        return self._issueRequest(request).addCallback(unwrap)
     return wrapper
 
 
@@ -43,9 +43,9 @@ def _issueRequest(request):
     request and the tests can inspect the request.
     """
     ret = {}
-    for client, (method, args, kwargs) in request.iteritems():
+    for client, (resultKey, method, args, kwargs) in request.iteritems():
         method = getattr(client, method)
-        ret[client] = method(*args, **kwargs)
+        ret[resultKey] = method(*args, **kwargs)
     return deferredDict(ret)
 
 
