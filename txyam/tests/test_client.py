@@ -129,6 +129,14 @@ class YamClientTests(unittest.TestCase):
         self.requestDeferred = defer.Deferred()
         return self.requestDeferred
 
+    def test_statsRequestWithNoFactories(self):
+        """
+        If there are no factories, the stats request is empty.
+        """
+        self.client.factories = []
+        self.client.stats()
+        self.assertEqual(self.request, {})
+
     def test_statsRequestWithOneFactory(self):
         """
         Stats requests can be issued to one factory.
@@ -179,6 +187,14 @@ class YamClientTests(unittest.TestCase):
         self.requestDeferred.callback({'localhost:11211': sentinel})
         self.assertEqual(
             self.successResultOf(d), {'localhost:11211': sentinel})
+
+    def test_versionRequestWithNoFactories(self):
+        """
+        If there are no factories, the version request is empty.
+        """
+        self.client.factories = []
+        self.client.version()
+        self.assertEqual(self.request, {})
 
     def test_versionRequestWithOneFactory(self):
         """
