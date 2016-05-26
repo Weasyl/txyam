@@ -1,47 +1,32 @@
 from twisted.internet.defer import Deferred
-from twisted.internet.protocol import ReconnectingClientFactory
-from twisted.python import log
+from twisted.internet.protocol import Factory
 from twisted.protocols.memcache import MemCacheProtocol
 
 
 class ConnectingMemCacheProtocol(MemCacheProtocol):
-    def connectionMade(self):
-        self.factory.connectionMade()
-
-
-class MemCacheClientFactory(ReconnectingClientFactory):
-    initialDelay = 0.1
-    protocol = ConnectingMemCacheProtocol
-    noisy = True
-
-    def __init__(self):
-        self.client = None
-        self.addr = None
+    def __init__(self, factory, reactor, **kw):
+        MemCacheProtocol.__init__(self, **kw)
+        self.factory = factory
+        self.reactor = reactor
         self.deferred = Deferred()
 
+    def callLater(self, *a, **kw):
+        return self.reactor.callLater(*a, **kw)
+
+    def timeoutConnection(self):
+        self.transport.abortConnection()
+
+    def connectionLost(self, reason):
+        MemCacheProtocol.connectionLost(self, reason)
+        self.deferred.errback(reason)
+
+
+class MemCacheClientFactory(Factory):
+    protocol = ConnectingMemCacheProtocol
+
+    def __init__(self, *a, **kw):
+        self._protocolArgs = a
+        self._protocolKwargs = kw
+
     def buildProtocol(self, addr):
-        self.client = self.protocol()
-        self.addr = addr
-        self.client.factory = self
-        self.resetDelay()
-        return self.client
-
-    def clientConnectionLost(self, connector, reason):
-        log.msg("Lost connection to %s - %s" % (self.addr, reason))
-        self.client = None
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionFailed(self, connector, reason):
-        log.msg("Connection failed to %s - %s" % (self.addr, reason))
-        self.client = None
-        ReconnectingClientFactory.clientConnectionFailed(
-            self, connector, reason)
-
-    def connectionMade(self):
-        # Only fire deferred after the first connection has been made.
-        # This is used in the ConnectedYamClient to keep track of when
-        # all factories have connected so that ConnectedYamClient.connect()
-        # can return a deferred list of these deferreds.
-        if self.deferred is not None:
-            self.deferred.callback(self)
-            self.deferred = None
+        return self.protocol(self, *self._protocolArgs, **self._protocolKwargs)

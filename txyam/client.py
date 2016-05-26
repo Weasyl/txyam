@@ -1,151 +1,154 @@
-import cPickle
-import zlib
+from collections import defaultdict
 
-from twisted.internet.defer import inlineCallbacks, DeferredList, returnValue
-from twisted.internet import reactor
+from consistent_hash.consistent_hash import ConsistentHash
+from twisted.internet.error import ConnectionAborted
+from twisted.internet import defer, endpoints
 from twisted.python import log
 
-from txyam.utils import ketama, deferredDict
+from txyam.utils import deferredDict
 from txyam.factory import MemCacheClientFactory
 
 
-class NoServerError(Exception):
-    """
-    No available connected servers to accept command.
-    """
-
-
-class InvalidHostPortError(Exception):
-    """
-    Invalid host/port specification.
-    """
-
-
-def wrap(cmd):
+def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
     """
     def wrapper(self, key, *args, **kwargs):
-        func = getattr(self.getClient(key), cmd)
-        return func(key, *args, **kwargs)
+        client = self.getClient(key)
+        if client is None:
+            return defer.succeed(None)
+        func = getattr(client, cmd)
+        d = func(key, *args, **kwargs)
+        d.addErrback(lambda ign: None)
+        return d
     return wrapper
 
 
-class YamClient:
-    def __init__(self, hosts, connect=True):
-        """
-        @param hosts: A C{list} of C{tuple}s containing hosts and ports.
-        """
-        self.hosts = hosts
-        if connect:
-            self.connect()
+class YamClient(object):
+    clientFromString = staticmethod(endpoints.clientFromString)
 
-    def getActiveConnections(self):
-        return [factory.client for factory in self.factories
-                if not factory.client is None]
+    def __init__(self, reactor, hosts, retryDelay=2, **kw):
+        self.reactor = reactor
+        self._allHosts = hosts
+        self._consistentHash = ConsistentHash([])
+        self._connectionDeferreds = set()
+        self._protocols = {}
+        self._retryDelay = retryDelay
+        self._protocolKwargs = kw
+        self.disconnecting = False
 
-    def getClient(self, key):
-        hosts = self.getActiveConnections()
-        log.msg("Using %i active hosts" % len(hosts))
-        if len(hosts) == 0:
-            raise NoServerError("No connected servers remaining.")
-        return hosts[ketama(key) % len(hosts)]
-
-    @inlineCallbacks
     def connect(self):
-        self.factories = []
-        for hp in self.hosts:
-            if isinstance(hp, tuple):
-                host, port = hp
-            elif isinstance(hp, str):
-                host = hp
-                port = 11211
-            else:
-                raise InvalidHostPortError(
-                    "Connection info should be either hostnames or "
-                    "host/port tuples")
-            factory = MemCacheClientFactory()
-            reactor.connectTCP(host, port, factory)
-            self.factories.append(factory)
+        self.disconnecting = False
+        deferreds = []
+        for host in self._allHosts:
+            deferreds.append(self._connectHost(host))
 
-        # fire callback when all connections have been established
-        yield DeferredList([factory.deferred for factory in self.factories])
-        returnValue(self)
+        dl = defer.DeferredList(deferreds)
+        dl.addCallback(lambda ign: self)
+        return dl
+
+    def _connectHost(self, host):
+        endpoint = self.clientFromString(self.reactor, host)
+        d = endpoint.connect(
+            MemCacheClientFactory(self.reactor, **self._protocolKwargs))
+        self._connectionDeferreds.add(d)
+        d.addCallback(self._gotProtocol, host, d)
+        d.addErrback(self._connectionFailed, host, d)
+        return d
+
+    def _gotProtocol(self, protocol, host, deferred):
+        self._connectionDeferreds.discard(deferred)
+        self._protocols[host] = protocol
+        self._consistentHash.add_nodes([host])
+        protocol.deferred.addErrback(self._lostProtocol, host)
+
+    def _connectionFailed(self, reason, host, deferred):
+        self._connectionDeferreds.discard(deferred)
+        if self.disconnecting:
+            return
+        log.err(reason, 'connection to %r failed' % (host,), system='txyam')
+        self.reactor.callLater(self._retryDelay, self._connectHost, host)
+
+    def _lostProtocol(self, reason, host):
+        if not self.disconnecting:
+            log.err(reason, 'connection to %r lost' % (host,), system='txyam')
+        del self._protocols[host]
+        self._consistentHash.del_nodes([host])
+        if self.disconnecting:
+            return
+        if reason.check(ConnectionAborted):
+            self._connectHost(host)
+        else:
+            self.reactor.callLater(self._retryDelay, self._connectHost, host)
+
+    @property
+    def _allConnections(self):
+        return self._protocols.itervalues()
 
     def disconnect(self):
-        log.msg("Disconnecting from all clients.")
-        for factory in self.factories:
-            factory.stopTrying()
-        for connection in self.getActiveConnections():
-            connection.transport.loseConnection()
+        self.disconnecting = True
+        log.msg('disconnecting from all clients', system='txyam')
+        for d in list(self._connectionDeferreds):
+            d.cancel()
+        for proto in self._allConnections:
+            proto.transport.loseConnection()
 
     def flushAll(self):
-        hosts = self.getActiveConnections()
-        log.msg("Flushing %i hosts" % len(hosts))
-        return DeferredList([host.flushAll() for host in hosts])
+        return defer.gatherResults(
+            [proto.flushAll() for proto in self._allConnections])
 
     def stats(self, arg=None):
         ds = {}
-        for factory in self.factories:
-            if not factory.client is None:
-                hp = "%s:%i" % (factory.addr.host, factory.addr.port)
-                ds[hp] = factory.client.stats(arg)
-        log.msg("Getting stats on %i hosts" % len(ds))
+        for host, proto in self._protocols.iteritems():
+            ds[host] = proto.stats(arg)
         return deferredDict(ds)
 
     def version(self):
         ds = {}
-        for factory in self.factories:
-            if not factory.client is None:
-                hp = "%s:%i" % (factory.addr.host, factory.addr.port)
-                ds[hp] = factory.client.version()
-        log.msg("Getting version on %i hosts" % len(ds))
+        for host, proto in self._protocols.iteritems():
+            ds[host] = proto.version()
         return deferredDict(ds)
 
-    def pickle(self, value, compress):
-        p = cPickle.dumps(value, cPickle.HIGHEST_PROTOCOL)
-        if compress:
-            p = zlib.compress(p)
-        return p
+    def getClient(self, key):
+        return self._protocols.get(self._consistentHash.get_node(key))
 
-    def unpickle(self, value, uncompress):
-        if uncompress:
-            value = zlib.decompress(value)
-        return cPickle.loads(value)
+    def getMultiple(self, keys, withIdentifier=False):
+        clients = defaultdict(list)
+        for key in keys:
+            clients[self.getClient(key)].append(key)
+        dl = defer.DeferredList(
+            [c.getMultiple(ks, withIdentifier) for c, ks in clients.iteritems()
+             if c is not None],
+            consumeErrors=True)
+        dl.addCallback(self._consolidateMultiple)
+        return dl
 
-    def setPickled(self, key, value, **kwargs):
-        value = self.pickle(value, kwargs.pop('compress', False))
-        return self.set(key, value, **kwargs)
+    def setMultiple(self, items, flags=0, expireTime=0):
+        ds = {}
+        for key, value in items.iteritems():
+            ds[key] = self.set(key, value, flags, expireTime)
+        return deferredDict(ds)
 
-    def addPickled(self, key, value, **kwargs):
-        value = self.pickle(value, kwargs.pop('compress', False))
-        return self.add(key, value, **kwargs)
+    def deleteMultiple(self, keys):
+        ds = {}
+        for key in keys:
+            ds[key] = self.delete(key)
+        return deferredDict(ds)
 
-    def getPickled(self, key, **kwargs):
-        def handleResult(result, uncompress):
-            index = len(result) - 1
-            result = list(result)
-            if result[index] is not None:
-                result[index] = self.unpickle(result[index], uncompress)
-            return tuple(result)
-        uncompress = kwargs.pop('uncompress', False)
-        return self.get(key, **kwargs).addCallback(handleResult, uncompress)
+    def _consolidateMultiple(self, results):
+        ret = {}
+        for succeeded, result in results:
+            if succeeded:
+                ret.update(result)
+        return ret
 
-    # Following methods can be found at
-    # http://twistedmatrix.com/trac/browser/tags/releases/twisted-12.0.0/twisted/protocols/memcache.py
-    set = wrap("set")
-    get = wrap("get")
-    increment = wrap("increment")
-    decrement = wrap("decrement")
-    replace = wrap("replace")
-    add = wrap("add")
-    set = wrap("set")
-    checkAndSet = wrap("checkAndSet")
-    append = wrap("append")
-    prepend = wrap("prepend")
-    getMultiple = wrap("getMultiple")
-    delete = wrap("delete")
-
-
-def ConnectedYamClient(hosts):
-    return YamClient(hosts, connect=False).connect()
+    set = _wrap('set')
+    get = _wrap('get')
+    increment = _wrap('increment')
+    decrement = _wrap('decrement')
+    replace = _wrap('replace')
+    add = _wrap('add')
+    checkAndSet = _wrap('checkAndSet')
+    append = _wrap('append')
+    prepend = _wrap('prepend')
+    delete = _wrap('delete')
