@@ -9,6 +9,20 @@ from txyam.utils import deferredDict
 from txyam.factory import MemCacheClientFactory
 
 
+if hasattr(dict, "iteritems"):
+    def iteritems(d):
+        return d.iteritems()
+
+    def itervalues(d):
+        return d.itervalues()
+else:
+    def iteritems(d):
+        return d.items()
+
+    def itervalues(d):
+        return d.values()
+
+
 def _wrap(cmd):
     """
     Used to wrap all of the memcache methods (get,set,getMultiple,etc).
@@ -83,7 +97,7 @@ class YamClient(object):
 
     @property
     def _allConnections(self):
-        return self._protocols.itervalues()
+        return itervalues(self._protocols)
 
     def disconnect(self):
         self.disconnecting = True
@@ -99,13 +113,13 @@ class YamClient(object):
 
     def stats(self, arg=None):
         ds = {}
-        for host, proto in self._protocols.iteritems():
+        for host, proto in iteritems(self._protocols):
             ds[host] = proto.stats(arg)
         return deferredDict(ds)
 
     def version(self):
         ds = {}
-        for host, proto in self._protocols.iteritems():
+        for host, proto in iteritems(self._protocols):
             ds[host] = proto.version()
         return deferredDict(ds)
 
@@ -117,7 +131,7 @@ class YamClient(object):
         for key in keys:
             clients[self.getClient(key)].append(key)
         dl = defer.DeferredList(
-            [c.getMultiple(ks, withIdentifier) for c, ks in clients.iteritems()
+            [c.getMultiple(ks, withIdentifier) for c, ks in iteritems(clients)
              if c is not None],
             consumeErrors=True)
         dl.addCallback(self._consolidateMultiple)
@@ -125,7 +139,7 @@ class YamClient(object):
 
     def setMultiple(self, items, flags=0, expireTime=0):
         ds = {}
-        for key, value in items.iteritems():
+        for key, value in iteritems(items):
             ds[key] = self.set(key, value, flags, expireTime)
         return deferredDict(ds)
 
