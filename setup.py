@@ -8,7 +8,7 @@ setup(
     author="Brian Muller",
     author_email="bamuller@gmail.com",
     license="MIT",
-    url="http://github.com/bmuller/txyam",
+    url="https://github.com/Weasyl/txyam2",
     packages=find_packages(),
     install_requires=[
         'twisted>=12.0',
