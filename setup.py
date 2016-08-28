@@ -12,7 +12,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'twisted>=16.4',
-        'consistent_hash',
+        'consistent_hash_git==0.3',
     ],
     extras_require={
         'sync': [
