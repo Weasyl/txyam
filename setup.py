@@ -11,7 +11,7 @@ setup(
     url="https://github.com/Weasyl/txyam2",
     packages=find_packages(),
     install_requires=[
-        'twisted>=12.0',
+        'twisted>=16.4',
         'consistent_hash',
     ],
     extras_require={
