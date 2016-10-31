@@ -1,4 +1,3 @@
-import pytest
 from twisted.internet.error import ConnectionAborted
 from twisted.internet import defer
 from twisted.python.failure import Failure
@@ -36,12 +35,10 @@ class FakeError(Exception):
     pass
 
 
-@pytest.fixture
 def clock():
     return proto_helpers.Clock()
 
 
-@pytest.fixture
 def yam(clock, **kw):
     endpoints = {
         'fake:1': FakeEndpoint(),
@@ -59,10 +56,9 @@ def yam(clock, **kw):
 
 
 class YamClientTests(TestCase):
-    @pytest.fixture(autouse=True)
-    def _init(self, clock, yam):
-        self.clock = clock
-        self.yam = yam
+    def setUp(self):
+        self.clock = clock()
+        self.yam = yam(self.clock)
 
     def test_connectionDeferred(self):
         """
@@ -196,8 +192,8 @@ class YamClientTests(TestCase):
         self.yam.flushAll()
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'flush_all\r\n')
-        self.assertEqual(ep2.transport.value(), 'flush_all\r\n')
+        self.assertEqual(ep1.transport.value(), b'flush_all\r\n')
+        self.assertEqual(ep2.transport.value(), b'flush_all\r\n')
 
     def test_flushAllAnswer(self):
         """
@@ -208,8 +204,8 @@ class YamClientTests(TestCase):
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('OK\r\n')
-        ep2.proto.dataReceived('OK\r\n')
+        ep1.proto.dataReceived(b'OK\r\n')
+        ep2.proto.dataReceived(b'OK\r\n')
         self.assertEqual(self.successResultOf(d), [True, True])
 
     def test_flushAllAnswerWithOneClient(self):
@@ -223,7 +219,7 @@ class YamClientTests(TestCase):
         d = self.yam.flushAll()
         self.assertNoResult(d)
         ep2 = self.yam._endpoints['fake:2']
-        ep2.proto.dataReceived('OK\r\n')
+        ep2.proto.dataReceived(b'OK\r\n')
         self.assertEqual(self.successResultOf(d), [True])
 
     def test_flushAllAnswerWithNoClients(self):
@@ -246,8 +242,8 @@ class YamClientTests(TestCase):
         self.yam.stats()
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'stats\r\n')
-        self.assertEqual(ep2.transport.value(), 'stats\r\n')
+        self.assertEqual(ep1.transport.value(), b'stats\r\n')
+        self.assertEqual(ep2.transport.value(), b'stats\r\n')
 
     def test_statsAnswer(self):
         """
@@ -258,13 +254,13 @@ class YamClientTests(TestCase):
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('STAT key1 value1\r\nEND\r\n')
-        ep2.proto.dataReceived('STAT key2 value2\r\nEND\r\n')
+        ep1.proto.dataReceived(b'STAT key1 value1\r\nEND\r\n')
+        ep2.proto.dataReceived(b'STAT key2 value2\r\nEND\r\n')
         self.assertEqual(
             self.successResultOf(d),
             {
-                'fake:1': {'key1': 'value1'},
-                'fake:2': {'key2': 'value2'},
+                'fake:1': {b'key1': b'value1'},
+                'fake:2': {b'key2': b'value2'},
             })
 
     def test_statsAnswerWithOneClient(self):
@@ -277,11 +273,11 @@ class YamClientTests(TestCase):
         d = self.yam.stats()
         self.assertNoResult(d)
         ep2 = self.yam._endpoints['fake:2']
-        ep2.proto.dataReceived('STAT key2 value2\r\nEND\r\n')
+        ep2.proto.dataReceived(b'STAT key2 value2\r\nEND\r\n')
         self.assertEqual(
             self.successResultOf(d),
             {
-                'fake:2': {'key2': 'value2'},
+                'fake:2': {b'key2': b'value2'},
             })
 
     def test_statsAnswerWithNoClients(self):
@@ -304,8 +300,8 @@ class YamClientTests(TestCase):
         self.yam.version()
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'version\r\n')
-        self.assertEqual(ep2.transport.value(), 'version\r\n')
+        self.assertEqual(ep1.transport.value(), b'version\r\n')
+        self.assertEqual(ep2.transport.value(), b'version\r\n')
 
     def test_versionAnswer(self):
         """
@@ -316,13 +312,13 @@ class YamClientTests(TestCase):
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('VERSION 1.1.1\r\n')
-        ep2.proto.dataReceived('VERSION 2.2.2\r\n')
+        ep1.proto.dataReceived(b'VERSION 1.1.1\r\n')
+        ep2.proto.dataReceived(b'VERSION 2.2.2\r\n')
         self.assertEqual(
             self.successResultOf(d),
             {
-                'fake:1': '1.1.1',
-                'fake:2': '2.2.2',
+                'fake:1': b'1.1.1',
+                'fake:2': b'2.2.2',
             })
 
     def test_versionAnswerWithOneClient(self):
@@ -335,11 +331,11 @@ class YamClientTests(TestCase):
         d = self.yam.version()
         self.assertNoResult(d)
         ep2 = self.yam._endpoints['fake:2']
-        ep2.proto.dataReceived('VERSION 2.2.2\r\n')
+        ep2.proto.dataReceived(b'VERSION 2.2.2\r\n')
         self.assertEqual(
             self.successResultOf(d),
             {
-                'fake:2': '2.2.2',
+                'fake:2': b'2.2.2',
             })
 
     def test_versionAnswerWithNoClients(self):
@@ -359,34 +355,34 @@ class YamClientTests(TestCase):
         getMultiple issues queries to multiple clients.
         """
         self.yam.connect()
-        self.yam.getMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        self.yam.getMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'get key5\r\n')
-        self.assertEqual(ep2.transport.value(), 'get key1 key2 key3 key4\r\n')
+        self.assertEqual(ep1.transport.value(), b'get key5\r\n')
+        self.assertEqual(ep2.transport.value(), b'get key1 key2 key3 key4\r\n')
 
     def test_getMultipleAnswer(self):
         """
         getMultiple aggregates answers from each client.
         """
         self.yam.connect()
-        d = self.yam.getMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        d = self.yam.getMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('VALUE key5 0 1\r\n5\r\nEND\r\n')
-        ep2.proto.dataReceived('VALUE key1 0 1\r\n1\r\n')
-        ep2.proto.dataReceived('VALUE key2 0 1\r\n2\r\n')
-        ep2.proto.dataReceived('VALUE key3 0 1\r\n3\r\n')
-        ep2.proto.dataReceived('VALUE key4 0 1\r\n4\r\nEND\r\n')
+        ep1.proto.dataReceived(b'VALUE key5 0 1\r\n5\r\nEND\r\n')
+        ep2.proto.dataReceived(b'VALUE key1 0 1\r\n1\r\n')
+        ep2.proto.dataReceived(b'VALUE key2 0 1\r\n2\r\n')
+        ep2.proto.dataReceived(b'VALUE key3 0 1\r\n3\r\n')
+        ep2.proto.dataReceived(b'VALUE key4 0 1\r\n4\r\nEND\r\n')
         self.assertEqual(
             self.successResultOf(d),
             {
-                'key1': (0, '1'),
-                'key2': (0, '2'),
-                'key3': (0, '3'),
-                'key4': (0, '4'),
-                'key5': (0, '5'),
+                b'key1': (0, b'1'),
+                b'key2': (0, b'2'),
+                b'key3': (0, b'3'),
+                b'key4': (0, b'4'),
+                b'key5': (0, b'5'),
             })
 
     def test_getMultipleQueryWithOneClient(self):
@@ -397,10 +393,10 @@ class YamClientTests(TestCase):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 1)
-        self.yam.getMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        self.yam.getMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         ep1 = self.yam._endpoints['fake:1']
         self.assertEqual(
-            ep1.transport.value(), 'get key1 key2 key3 key4 key5\r\n')
+            ep1.transport.value(), b'get key1 key2 key3 key4 key5\r\n')
 
     def test_getMultipleQueryWithNoClients(self):
         """
@@ -411,7 +407,7 @@ class YamClientTests(TestCase):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
-        d = self.yam.getMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        d = self.yam.getMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         self.assertEqual(self.successResultOf(d), {})
 
     def test_setMultipleQuery(self):
@@ -420,17 +416,21 @@ class YamClientTests(TestCase):
         """
         self.yam.connect()
         self.yam.setMultiple({
-            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+            b'key1': b'1',
+            b'key2': b'2',
+            b'key3': b'3',
+            b'key4': b'4',
+            b'key5': b'5',
         })
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'set key5 0 0 1\r\n5\r\n')
+        self.assertEqual(ep1.transport.value(), b'set key5 0 0 1\r\n5\r\n')
         self.assertEqual(
             sorted(ep2.transport.value().splitlines()[::2]), [
-                'set key1 0 0 1',
-                'set key2 0 0 1',
-                'set key3 0 0 1',
-                'set key4 0 0 1',
+                b'set key1 0 0 1',
+                b'set key2 0 0 1',
+                b'set key3 0 0 1',
+                b'set key4 0 0 1',
             ])
 
     def test_setMultipleAnswer(self):
@@ -439,16 +439,20 @@ class YamClientTests(TestCase):
         """
         self.yam.connect()
         d = self.yam.setMultiple({
-            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+            b'key1': b'1',
+            b'key2': b'2',
+            b'key3': b'3',
+            b'key4': b'4',
+            b'key5': b'5',
         })
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('STORED\r\n')
-        ep2.proto.dataReceived('STORED\r\n' * 4)
+        ep1.proto.dataReceived(b'STORED\r\n')
+        ep2.proto.dataReceived(b'STORED\r\n' * 4)
         self.assertEqual(
             self.successResultOf(d),
-            dict.fromkeys(['key1', 'key2', 'key3', 'key4', 'key5'], True))
+            dict.fromkeys([b'key1', b'key2', b'key3', b'key4', b'key5'], True))
 
     def test_setMultipleQueryWithOneClient(self):
         """
@@ -459,16 +463,20 @@ class YamClientTests(TestCase):
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 1)
         self.yam.setMultiple({
-            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+            b'key1': b'1',
+            b'key2': b'2',
+            b'key3': b'3',
+            b'key4': b'4',
+            b'key5': b'5',
         })
         ep1 = self.yam._endpoints['fake:1']
         self.assertEqual(
             sorted(ep1.transport.value().splitlines()[::2]), [
-                'set key1 0 0 1',
-                'set key2 0 0 1',
-                'set key3 0 0 1',
-                'set key4 0 0 1',
-                'set key5 0 0 1',
+                b'set key1 0 0 1',
+                b'set key2 0 0 1',
+                b'set key3 0 0 1',
+                b'set key4 0 0 1',
+                b'set key5 0 0 1',
             ])
 
     def test_setMultipleQueryWithNoClients(self):
@@ -481,39 +489,44 @@ class YamClientTests(TestCase):
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
         d = self.yam.setMultiple({
-            'key1': '1', 'key2': '2', 'key3': '3', 'key4': '4', 'key5': '5',
+            b'key1': b'1',
+            b'key2': b'2',
+            b'key3': b'3',
+            b'key4': b'4',
+            b'key5': b'5',
         })
         self.assertEqual(
             self.successResultOf(d),
-            dict.fromkeys(['key1', 'key2', 'key3', 'key4', 'key5']))
+            dict.fromkeys([b'key1', b'key2', b'key3', b'key4', b'key5']))
 
     def test_deleteMultipleQuery(self):
         """
         deleteMultiple issues commands to multiple clients.
         """
         self.yam.connect()
-        self.yam.deleteMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        self.yam.deleteMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        self.assertEqual(ep1.transport.value(), 'delete key5\r\n')
+        self.assertEqual(ep1.transport.value(), b'delete key5\r\n')
         self.assertEqual(
             sorted(ep2.transport.value().splitlines()),
-            ['delete key1', 'delete key2', 'delete key3', 'delete key4'])
+            [b'delete key1', b'delete key2', b'delete key3', b'delete key4'])
 
     def test_deleteMultipleAnswer(self):
         """
         deleteMultiple aggregates answers from each client.
         """
         self.yam.connect()
-        d = self.yam.deleteMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        d = self.yam.deleteMultiple([b'key1', b'key2', b'key3',
+                                     b'key4', b'key5'])
         self.assertNoResult(d)
         ep1 = self.yam._endpoints['fake:1']
         ep2 = self.yam._endpoints['fake:2']
-        ep1.proto.dataReceived('DELETED\r\n')
-        ep2.proto.dataReceived('DELETED\r\n' * 4)
+        ep1.proto.dataReceived(b'DELETED\r\n')
+        ep2.proto.dataReceived(b'DELETED\r\n' * 4)
         self.assertEqual(
             self.successResultOf(d),
-            dict.fromkeys(['key1', 'key2', 'key3', 'key4', 'key5'], True))
+            dict.fromkeys([b'key1', b'key2', b'key3', b'key4', b'key5'], True))
 
     def test_deleteMultipleQueryWithOneClient(self):
         """
@@ -523,12 +536,12 @@ class YamClientTests(TestCase):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 1)
-        self.yam.deleteMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        self.yam.deleteMultiple([b'key1', b'key2', b'key3', b'key4', b'key5'])
         ep1 = self.yam._endpoints['fake:1']
         self.assertEqual(
             sorted(ep1.transport.value().splitlines()),
-            ['delete key1', 'delete key2', 'delete key3', 'delete key4',
-             'delete key5'])
+            [b'delete key1', b'delete key2', b'delete key3', b'delete key4',
+             b'delete key5'])
 
     def test_deleteMultipleQueryWithNoClients(self):
         """
@@ -539,16 +552,16 @@ class YamClientTests(TestCase):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
-        d = self.yam.deleteMultiple(['key1', 'key2', 'key3', 'key4', 'key5'])
+        d = self.yam.deleteMultiple([b'key1', b'key2', b'key3',
+                                     b'key4', b'key5'])
         self.assertEqual(
             self.successResultOf(d),
-            dict.fromkeys(['key1', 'key2', 'key3', 'key4', 'key5']))
+            dict.fromkeys([b'key1', b'key2', b'key3', b'key4', b'key5']))
 
 
 class CustomYamClientTests(TestCase):
-    @pytest.fixture(autouse=True)
-    def _init(self, clock):
-        self.clock = clock
+    def setUp(self):
+        self.clock = clock()
 
     def test_configuringTimeout(self):
         """
@@ -556,7 +569,7 @@ class CustomYamClientTests(TestCase):
         """
         self.yam = yam(self.clock, timeOut=1)
         self.yam.connect()
-        d = self.yam.get('key1')
+        d = self.yam.get(b'key1')
         self.assertNoResult(d)
         self.clock.advance(1)
         self.assertIdentical(self.successResultOf(d), None)
@@ -576,10 +589,9 @@ class CustomYamClientTests(TestCase):
 
 
 class YamClientCommandTestsMixin(object):
-    @pytest.fixture(autouse=True)
-    def _init(self, clock, yam):
-        self.clock = clock
-        self.yam = yam
+    def setUp(self):
+        self.clock = clock()
+        self.yam = yam(self.clock)
 
     method = None
     arguments = ()
@@ -592,7 +604,7 @@ class YamClientCommandTestsMixin(object):
         The command will be issued to the appropriate client.
         """
         self.yam.connect()
-        getattr(self.yam, self.method)('key1', *self.arguments)
+        getattr(self.yam, self.method)(b'key1', *self.arguments)
         ep = self.yam._endpoints['fake:2']
         self.assertEqual(ep.transport.value(), self.query)
 
@@ -602,7 +614,7 @@ class YamClientCommandTestsMixin(object):
         given.
         """
         self.yam.connect()
-        d = getattr(self.yam, self.method)('key1', *self.arguments)
+        d = getattr(self.yam, self.method)(b'key1', *self.arguments)
         self.assertNoResult(d)
         ep = self.yam._endpoints['fake:2']
         ep.proto.dataReceived(self.response)
@@ -616,7 +628,7 @@ class YamClientCommandTestsMixin(object):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 1)
-        getattr(self.yam, self.method)('key1', *self.arguments)
+        getattr(self.yam, self.method)(b'key1', *self.arguments)
         ep = self.yam._endpoints['fake:1']
         self.assertEqual(ep.transport.value(), self.query)
 
@@ -628,7 +640,7 @@ class YamClientCommandTestsMixin(object):
         self.yam._endpoints['fake:2'].failure = FakeError()
         self.yam.connect()
         self.assertEqual(len(self.flushLoggedErrors(FakeError)), 2)
-        d = getattr(self.yam, self.method)('key1', *self.arguments)
+        d = getattr(self.yam, self.method)(b'key1', *self.arguments)
         self.assertIdentical(self.successResultOf(d), None)
 
     def test_timedOut(self):
@@ -636,7 +648,7 @@ class YamClientCommandTestsMixin(object):
         The command will silently fire with None if the command times out.
         """
         self.yam.connect()
-        d = getattr(self.yam, self.method)('key1', *self.arguments)
+        d = getattr(self.yam, self.method)(b'key1', *self.arguments)
         self.assertNoResult(d)
         self.clock.advance(60)
         self.assertIdentical(self.successResultOf(d), None)
@@ -649,10 +661,10 @@ class YamClientCommandTestsMixin(object):
         out.
         """
         self.yam.connect()
-        d1 = getattr(self.yam, self.method)('key1', *self.arguments)
+        d1 = getattr(self.yam, self.method)(b'key1', *self.arguments)
         self.assertNoResult(d1)
         self.clock.advance(30)
-        d2 = getattr(self.yam, self.method)('key1', *self.arguments)
+        d2 = getattr(self.yam, self.method)(b'key1', *self.arguments)
         self.assertNoResult(d2)
         self.clock.advance(30)
         self.assertIdentical(self.successResultOf(d1), None)
@@ -661,77 +673,77 @@ class YamClientCommandTestsMixin(object):
         self.assertEqual(len(self.flushLoggedErrors(ConnectionAborted)), 1)
 
 
-class YamClientCommandSetTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandSetTests(YamClientCommandTestsMixin, TestCase):
     method = 'set'
-    arguments = ('value',)
-    query = 'set key1 0 0 5\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value',)
+    query = b'set key1 0 0 5\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandGetTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandGetTests(YamClientCommandTestsMixin, TestCase):
     method = 'get'
-    query = 'get key1\r\n'
-    response = 'VALUE key1 0 1\r\nx\r\nEND\r\n'
-    deferredResult = (0, 'x')
+    query = b'get key1\r\n'
+    response = b'VALUE key1 0 1\r\nx\r\nEND\r\n'
+    deferredResult = (0, b'x')
 
 
-class YamClientCommandIncrementTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandIncrementTests(YamClientCommandTestsMixin, TestCase):
     method = 'increment'
-    query = 'incr key1 1\r\n'
-    response = '2\r\n'
+    query = b'incr key1 1\r\n'
+    response = b'2\r\n'
     deferredResult = 2
 
 
-class YamClientCommandDecrementTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandDecrementTests(YamClientCommandTestsMixin, TestCase):
     method = 'decrement'
-    query = 'decr key1 1\r\n'
-    response = '2\r\n'
+    query = b'decr key1 1\r\n'
+    response = b'2\r\n'
     deferredResult = 2
 
 
-class YamClientCommandReplaceTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandReplaceTests(YamClientCommandTestsMixin, TestCase):
     method = 'replace'
-    arguments = ('value',)
-    query = 'replace key1 0 0 5\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value',)
+    query = b'replace key1 0 0 5\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandAddTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandAddTests(YamClientCommandTestsMixin, TestCase):
     method = 'add'
-    arguments = ('value',)
-    query = 'add key1 0 0 5\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value',)
+    query = b'add key1 0 0 5\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandCheckAndSetTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandCheckAndSetTests(YamClientCommandTestsMixin, TestCase):
     method = 'checkAndSet'
-    arguments = ('value', '9')
-    query = 'cas key1 0 0 5 9\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value', b'9')
+    query = b'cas key1 0 0 5 9\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandAppendTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandAppendTests(YamClientCommandTestsMixin, TestCase):
     method = 'append'
-    arguments = ('value',)
-    query = 'append key1 0 0 5\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value',)
+    query = b'append key1 0 0 5\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandPrependTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandPrependTests(YamClientCommandTestsMixin, TestCase):
     method = 'prepend'
-    arguments = ('value',)
-    query = 'prepend key1 0 0 5\r\nvalue\r\n'
-    response = 'STORED\r\n'
+    arguments = (b'value',)
+    query = b'prepend key1 0 0 5\r\nvalue\r\n'
+    response = b'STORED\r\n'
     deferredResult = True
 
 
-class YamClientCommandDeleteTests(TestCase, YamClientCommandTestsMixin):
+class YamClientCommandDeleteTests(YamClientCommandTestsMixin, TestCase):
     method = 'delete'
-    query = 'delete key1\r\n'
-    response = 'DELETED\r\n'
+    query = b'delete key1\r\n'
+    response = b'DELETED\r\n'
     deferredResult = True

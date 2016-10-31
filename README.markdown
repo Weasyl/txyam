@@ -1,5 +1,5 @@
 # txyam: Yet Another Memcached (YAM) client for Twisted
-[![Build Status](https://secure.travis-ci.org/bmuller/txyam.png?branch=master)](https://travis-ci.org/bmuller/txyam)
+[![Build Status](https://secure.travis-ci.org/Weasyl/txyam2.svg?branch=master)](https://travis-ci.org/Weasyl/txyam2)
 
 This project is specifically designed for asynchronous [Python Twisted](http://twistedmatrix.com) code to interact with multiple [memcached](http://memcached.org) servers.  A number of other libraries exist, but none of them supported all of the following:
 
@@ -50,4 +50,4 @@ calls just pull the results from memcache.  The function will be memoized based 
 name and arguments.  The function being memoized can return an object, which will be picked before saving.
 
 ## Errors / Bugs / Contact
-See [github](http://github.com/bmuller/txyam).
+See [github](http://github.com/Weasyl/txyam2).
